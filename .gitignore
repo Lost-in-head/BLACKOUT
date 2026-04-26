@@ -1,0 +1,156 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Wheels
+*.whl
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+virtualenv/
+
+# pytest / coverage
+.pytest_cache/
+.cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+nosetests.xml
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pylint
+pylint.txt
+
+# pytype
+.pytype/
+
+# Pyre type checker
+.pyre/
+
+# tox
+.tox/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── Editors & IDEs ───────────────────────────────────────────────────────────
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+\#*\#
+.\#*
+
+# Spyder
+.spyderproject.d/
+.spyproject
+
+# ─── OS-generated files ───────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+
+# ─── Secrets & credentials ────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+!.env.example
+secrets.json
+secrets.yaml
+secrets.yml
+credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+config/local*.py
+config/local*.json
+
+# ─── Logs & databases ─────────────────────────────────────────────────────────
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# ─── Backup & temp files ──────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+*.orig
+*.rej
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+.dockerignore
+docker-compose.override.yml
+
+# ─── Node (if any frontend tooling is added later) ───────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ─── Docs build output ────────────────────────────────────────────────────────
+site/
+docs/_build/
+
+# ─── Miscellaneous ────────────────────────────────────────────────────────────
+*.mo
+*.pot
+.Python
