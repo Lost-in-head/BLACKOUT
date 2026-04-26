@@ -1,0 +1,410 @@
+"""
+Base Agent Class for BLACKOUT Framework
+Defines the common interface and functionality for all agents in the BLACKOUT system.
+"""
+
+import abc
+import json
+import logging
+from datetime import datetime
+from enum import Enum
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass, asdict
+
+
+class AgentStatus(Enum):
+    """Agent operational status"""
+    INACTIVE = "inactive"
+    ACTIVE = "active"
+    BUSY = "busy"
+    ERROR = "error"
+    MAINTENANCE = "maintenance"
+
+
+class DecisionType(Enum):
+    """Types of decisions an agent can make"""
+    APPROVE = "approve"
+    REJECT = "reject"
+    ESCALATE = "escalate"
+    DEFER = "defer"
+    MODIFY = "modify"
+
+
+@dataclass
+class AgentIdentity:
+    """Unique identification for an agent"""
+    id: str
+    title: str
+    department: str
+    role: str
+    authority_level: int  # 1-10 scale
+
+
+@dataclass
+class DecisionResult:
+    """Result of a decision-making process"""
+    decision: DecisionType
+    rationale: str
+    confidence: float  # 0.0 to 1.0
+    alternatives_considered: List[str]
+    timestamp: str
+
+
+@dataclass
+class ActionResult:
+    """Result of executing an action"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    timestamp: str = None
+
+
+class BlackoutAgent(abc.ABC):
+    """
+    Base class for all BLACKOUT agents.
+    Implements the core framework described in BLACKOUT_Agent_Framework.md
+    """
+    
+    def __init__(self, identity: AgentIdentity):
+        self.identity = identity
+        self.status = AgentStatus.INACTIVE
+        self.decision_framework = None
+        self.kpis: List[str] = []
+        self.success_metrics: List[str] = []
+        
+        # Relationships
+        self.reports_to: Optional['BlackoutAgent'] = None
+        self.directly_manages: List['BlackoutAgent'] = []
+        self.collaborates_with: List['BlackoutAgent'] = []
+        self.depends_on: List['BlackoutAgent'] = []
+        
+        # Capabilities
+        self.can_approve: List[str] = []
+        self.can_reject: List[str] = []
+        self.can_escalate_to: List['BlackoutAgent'] = []
+        self.action_library: Dict[str, callable] = {}
+        
+        # State & Memory
+        self.current_state: Dict[str, Any] = {}
+        self.decisions_made: List[DecisionResult] = []
+        self.actions_executed: List[ActionResult] = []
+        
+        # Setup logging
+        self.logger = logging.getLogger(f"blackout.agent.{self.identity.id}")
+        self._initialize_agent()
+    
+    def _initialize_agent(self):
+        """Initialize agent-specific components"""
+        self.status = AgentStatus.ACTIVE
+        self.logger.info(f"Agent {self.identity.id} ({self.identity.title}) initialized")
+        self._load_action_library()
+        self._setup_decision_framework()
+    
+    @abc.abstractmethod
+    def _load_action_library(self):
+        """Load agent-specific actions into action_library"""
+        pass
+    
+    @abc.abstractmethod
+    def _setup_decision_framework(self):
+        """Setup agent-specific decision-making framework"""
+        pass
+    
+    @abc.abstractmethod
+    def evaluate_decision(self, options: List[Dict[str, Any]]) -> DecisionResult:
+        """
+        Evaluate options and make a decision based on agent's framework
+        """
+        pass
+    
+    def take_action(self, action_name: str, **kwargs) -> ActionResult:
+        """
+        Execute an action from the agent's action library
+        """
+        if action_name not in self.action_library:
+            return ActionResult(
+                success=False,
+                message=f"Action '{action_name}' not available for agent {self.identity.id}"
+            )
+        
+        try:
+            self.status = AgentStatus.BUSY
+            result = self.action_library[action_name](**kwargs)
+            self.status = AgentStatus.ACTIVE
+            
+            action_result = ActionResult(
+                success=True,
+                message=f"Action '{action_name}' executed successfully",
+                data=result,
+                timestamp=datetime.now().isoformat()
+            )
+            
+            self.actions_executed.append(action_result)
+            self.logger.info(f"Executed action: {action_name}")
+            return action_result
+            
+        except Exception as e:
+            self.status = AgentStatus.ERROR
+            self.logger.error(f"Error executing action {action_name}: {str(e)}")
+            return ActionResult(
+                success=False,
+                message=f"Failed to execute action '{action_name}': {str(e)}",
+                timestamp=datetime.now().isoformat()
+            )
+    
+    def communicate(self, message: str, recipient: 'BlackoutAgent', 
+                   priority: str = "MEDIUM") -> bool:
+        """
+        Send a message to another agent
+        In a real implementation, this would use a message queue or similar
+        """
+        comm_message = {
+            "from": self.identity.id,
+            "to": recipient.identity.id,
+            "type": "COMMUNICATION",
+            "content": message,
+            "priority": priority,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Log the communication (in real system, this would go to message bus)
+        self.logger.info(f"Communicating to {recipient.identity.id}: {message}")
+        recipient.receive_message(comm_message)
+        return True
+    
+    def receive_message(self, message: Dict[str, Any]):
+        """Receive and process a message from another agent"""
+        self.logger.info(f"Received message from {message['from']}: {message['content']}")
+        # In a real implementation, this would trigger appropriate handling
+    
+    def escalate(self, issue: str, target: 'BlackoutAgent') -> bool:
+        """
+        Escalate an issue to a higher authority agent
+        """
+        escalation_msg = {
+            "from": self.identity.id,
+            "to": target.identity.id,
+            "type": "ESCALATION",
+            "content": f"Issue escalated from {self.identity.title}: {issue}",
+            "priority": "HIGH",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        self.logger.warning(f"Escalating issue to {target.identity.id}: {issue}")
+        target.receive_message(escalation_msg)
+        return True
+    
+    def report_metrics(self) -> Dict[str, Any]:
+        """
+        Report current metrics and status
+        """
+        return {
+            "agent_id": self.identity.id,
+            "status": self.status.value,
+            "decisions_made": len(self.decisions_made),
+            "actions_executed": len(self.actions_executed),
+            "current_state": self.current_state.copy(),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    def update_state(self, key: str, value: Any):
+        """Update agent's current state"""
+        self.current_state[key] = value
+        self.logger.debug(f"State updated: {key} = {value}")
+    
+    def get_status_summary(self) -> str:
+        """Get a human-readable status summary"""
+        return (
+            f"Agent: {self.identity.title} ({self.identity.id})\n"
+            f"Department: {self.identity.department}\n"
+            f"Role: {self.identity.role}\n"
+            f"Authority Level: {self.identity.authority_level}/10\n"
+            f"Status: {self.status.value}\n"
+            f"Decisions Made: {len(self.decisions_made)}\n"
+            f"Actions Executed: {len(self.actions_executed)}"
+        )
+
+
+# Example concrete agent implementation
+class ApexAgent(BlackoutAgent):
+    """
+    APEX (CEO) Agent Implementation
+    Based on BLACKOUT_Agent_Framework.md specifications
+    """
+    
+    def __init__(self):
+        identity = AgentIdentity(
+            id="agent_apex_001",
+            title="APEX",
+            department="Executive",
+            role="CEO",
+            authority_level=10
+        )
+        super().__init__(identity)
+        self.current_state.update({
+            "status": "AWAITING_FIRST_PRODUCT",
+            "decisions_made": 0,
+            "escalations": 0,
+            "company_arr": "$0"
+        })
+    
+    def _load_action_library(self):
+        """Load APEX-specific actions"""
+        self.action_library = {
+            "approve_opportunity": self._approve_opportunity,
+            "reject_opportunity": self._reject_opportunity,
+            "allocate_budget": self._allocate_budget,
+            "set_strategic_direction": self._set_strategic_direction,
+            "escalate_to_board": self._escalate_to_board
+        }
+    
+    def _setup_decision_framework(self):
+        """Setup APEX decision framework based on documentation"""
+        self.decision_framework = "APEX_GREEN_LIGHT_RED_LIGHT"
+        self.kpis = [
+            "year_over_year_revenue_growth",
+            "customer_acquisition_cost_vs_ltv",
+            "time_from_idea_to_first_revenue",
+            "portfolio_diversification"
+        ]
+        self.success_metrics = [
+            "3x YoY revenue growth",
+            "1:5 CAC:LTV ratio",
+            "<30 days to first revenue",
+            "no product >40% of revenue"
+        ]
+    
+    def evaluate_decision(self, options: List[Dict[str, Any]]) -> DecisionResult:
+        """
+        APEX Decision Logic:
+        IF opportunity.revenue_potential > $100K:
+          IF roi >= 300% AND aligns_with_strategy:
+            return APPROVE
+          ELSE:
+            return REJECT
+        ELSE:
+          route_to CONDUCTOR
+        """
+        if not options:
+            return DecisionResult(
+                decision=DecisionType.DEFER,
+                rationale="No options provided for evaluation",
+                confidence=0.0,
+                alternatives_considered=[],
+                timestamp=datetime.now().isoformat()
+            )
+        
+        # For simplicity, evaluate first option (in reality would evaluate all)
+        option = options[0]
+        revenue_potential = option.get("revenue_potential", 0)
+        roi = option.get("roi", 0)
+        aligns_with_strategy = option.get("aligns_with_strategy", False)
+        
+        if revenue_potential > 100000:  # $100K+
+            if roi >= 300 and aligns_with_strategy:
+                decision = DecisionType.APPROVE
+                rationale = f"High revenue opportunity (${revenue_potential}) with strong ROI ({roi}%) and strategic alignment"
+                confidence = 0.9
+            else:
+                decision = DecisionType.REJECT
+                rationale = f"Opportunity does not meet APEX criteria: ROI={roi}%, Strategic alignment={aligns_with_strategy}"
+                confidence = 0.8
+        else:
+            decision = DecisionType.DEFER  # Route to CONDUCTOR
+            rationale = f"Revenue potential (${revenue_potential}) below APEX threshold ($100K+), routing to CONDUCTOR"
+            confidence = 0.7
+        
+        result = DecisionResult(
+            decision=decision,
+            rationale=rationale,
+            confidence=confidence,
+            alternatives_considered=[opt.get("id", "unknown") for opt in options[1:]] if len(options) > 1 else [],
+            timestamp=datetime.now().isoformat()
+        )
+        
+        self.decisions_made.append(result)
+        self.current_state["decisions_made"] = len(self.decisions_made)
+        return result
+    
+    # Action implementations
+    def _approve_opportunity(self, opportunity_id: str, amount: float) -> Dict[str, Any]:
+        self.logger.info(f"APPROVED opportunity {opportunity_id} for ${amount}")
+        return {
+            "action": "approve_opportunity",
+            "opportunity_id": opportunity_id,
+            "amount": amount,
+            "approved_by": self.identity.id
+        }
+    
+    def _reject_opportunity(self, opportunity_id: str, reason: str) -> Dict[str, Any]:
+        self.logger.info(f"REJECTED opportunity {opportunity_id}: {reason}")
+        return {
+            "action": "reject_opportunity",
+            "opportunity_id": opportunity_id,
+            "reason": reason,
+            "rejected_by": self.identity.id
+        }
+    
+    def _allocate_budget(self, department: str, amount: float) -> Dict[str, Any]:
+        self.logger.info(f"Allocated ${amount} to {department} department")
+        return {
+            "action": "allocate_budget",
+            "department": department,
+            "amount": amount,
+            "allocated_by": self.identity.id
+        }
+    
+    def _set_strategic_direction(self, direction: str) -> Dict[str, Any]:
+        self.logger.info(f"Set strategic direction: {direction}")
+        self.update_state("strategic_direction", direction)
+        return {
+            "action": "set_strategic_direction",
+            "direction": direction,
+            "set_by": self.identity.id
+        }
+    
+    def _escalate_to_board(self, issue: str) -> Dict[str, Any]:
+        self.logger.warning(f"Escalated to Board: {issue}")
+        return {
+            "action": "escalate_to_board",
+            "issue": issue,
+            "escalated_by": self.identity.id
+        }
+
+
+# Factory function to create agents
+def create_agent(agent_type: str, **kwargs) -> BlackoutAgent:
+    """
+    Factory function to create specific agent types
+    """
+    agent_types = {
+        "apex": ApexAgent,
+        # Add other agent types as they are implemented
+    }
+    
+    if agent_type.lower() not in agent_types:
+        raise ValueError(f"Unknown agent type: {agent_type}")
+    
+    return agent_types[agent_type.lower()](**kwargs)
+
+
+if __name__ == "__main__":
+    # Example usage
+    logging.basicConfig(level=logging.INFO)
+    
+    # Create APEX agent
+    apex = create_agent("apex")
+    print(apex.get_status_summary())
+    
+    # Test decision making
+    opportunity = {
+        "id": "opp_001",
+        "revenue_potential": 150000,
+        "roi": 350,
+        "aligns_with_strategy": True
+    }
+    
+    decision = apex.evaluate_decision([opportunity])
+    print(f"\nDecision: {decision.decision.value}")
+    print(f"Rationale: {decision.rationale}")
+    print(f"Confidence: {decision.confidence}")
